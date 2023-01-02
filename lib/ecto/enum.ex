@@ -103,7 +103,7 @@ defmodule Ecto.Enum do
         true ->
           raise ArgumentError, """
           Ecto.Enum types must have a values option specified as a list of atoms or a
-          keyword list with a mapping from atoms to either integer or string values.
+          keyword list with a mapping from atoms to either boolean, integer or string values.
 
           For example:
 
@@ -166,6 +166,7 @@ defmodule Ecto.Enum do
     cond do
       Enum.all?(values, &is_integer/1) -> :integer
       Enum.all?(values, &is_binary/1) -> :string
+      Enum.all?(values, &is_boolean/1) -> :boolean
       true -> nil
     end
   end
@@ -217,7 +218,7 @@ defmodule Ecto.Enum do
   end
 
   @doc "Returns the possible dump values for a given schema and field"
-  @spec dump_values(module, atom) :: [String.t()] | [integer()]
+  @spec dump_values(module, atom) :: [String.t()] | [integer()] [boolean()]
   def dump_values(schema, field) do
     schema
     |> mappings(field)

@@ -12,6 +12,8 @@ defmodule Ecto.EnumTest do
       field :my_enums, {:array, Ecto.Enum}, values: [:foo, :bar, :baz]
       field :my_integer_enum, Ecto.Enum, values: [foo: 1, bar: 2, baz: 5]
       field :my_integer_enums, {:array, Ecto.Enum}, values: [foo: 1, bar: 2, baz: 5]
+      field :my_boolean_enum, Ecto.Enum, values: [foo: false, bar: true]
+      field :my_boolean_enums, {:array, Ecto.Enum}, values: [foo: false, bar: true]
       field :my_string_enum, Ecto.Enum, values: [foo: "fooo", bar: "baar", baz: "baaz"]
       field :my_string_enums, {:array, Ecto.Enum}, values: [foo: "fooo", bar: "baar", baz: "baaz"]
       field :virtual_enum, Ecto.Enum, values: [:foo, :bar, :baz], virtual: true
@@ -75,6 +77,30 @@ defmodule Ecto.EnumTest do
                   }}
                }
 
+      assert EnumSchema.__schema__(:type, :my_boolean_enum) ==
+               {:parameterized, Ecto.Enum,
+                %{
+                  on_dump: %{bar: true, foo: false},
+                  on_load: %{true => :bar, false => :foo},
+                  on_cast: %{"bar" => :bar, "foo" => :foo},
+                  mappings: [foo: false, bar: true],
+                  type: :boolean,
+                  embed_as: :self
+                }}
+
+      assert EnumSchema.__schema__(:type, :my_boolean_enums) ==
+               {
+                 :array,
+                 {:parameterized, Ecto.Enum,
+                  %{
+                    on_dump: %{bar: true, foo: false},
+                    on_load: %{true => :bar, false => :foo},
+                    on_cast: %{"bar" => :bar, "foo" => :foo},
+                    mappings: [foo: false, bar: true],
+                    type: :boolean,
+                    embed_as: :self
+                  }}
+               }
       assert EnumSchema.__schema__(:type, :my_string_enum) ==
                {:parameterized, Ecto.Enum,
                 %{
@@ -126,6 +152,8 @@ defmodule Ecto.EnumTest do
     test "type" do
       assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_enum)) == :string
       assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_enums)) == {:array, :string}
+      assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_boolean_enum)) == :boolean
+      assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_boolean_enums)) == {:array, :boolean}
       assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_integer_enum)) == :integer
       assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_integer_enums)) == {:array, :integer}
       assert Ecto.Type.type(EnumSchema.__schema__(:type, :my_string_enum)) == :string
@@ -244,6 +272,14 @@ defmodule Ecto.EnumTest do
 
       assert %Changeset{valid?: true, changes: %{my_integer_enums: [:foo]}} =
                Changeset.cast(%EnumSchema{}, %{my_integer_enums: [1]}, [:my_integer_enums])
+    end
+
+    test "casts booleans" do
+      assert %Changeset{valid?: true, changes: %{my_boolean_enum: :foo}} =
+               Changeset.cast(%EnumSchema{}, %{my_boolean_enum: false}, [:my_boolean_enum])
+
+      assert %Changeset{valid?: true, changes: %{my_boolean_enums: [:foo]}} =
+               Changeset.cast(%EnumSchema{}, %{my_boolean_enums: [false]}, [:my_boolean_enums])
     end
 
     test "casts atoms" do
@@ -367,6 +403,16 @@ defmodule Ecto.EnumTest do
 
       assert_receive {:insert, %{fields: [my_integer_enums: [1]]}}
 
+      assert %EnumSchema{my_boolean_enum: :foo} =
+               TestRepo.insert!(%EnumSchema{my_boolean_enum: :foo})
+
+      assert_receive {:insert, %{fields: [my_boolean_enum: false]}}
+
+      assert %EnumSchema{my_boolean_enums: [:foo]} =
+               TestRepo.insert!(%EnumSchema{my_boolean_enums: [:foo]})
+
+      assert_receive {:insert, %{fields: [my_boolean_enums: [false]]}}
+
       assert %EnumSchema{embed: %{dumped_enum: :foo}} =
                TestRepo.insert!(%EnumSchema{embed: %EnumSchema.Embed{dumped_enum: :foo}})
 
@@ -425,28 +471,34 @@ defmodule Ecto.EnumTest do
 
   describe "load" do
     test "loads valid values" do
-      Process.put(:test_repo_all_results, {1, [[1, "foo", nil, nil, nil, nil, nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, "foo", nil, nil, nil, nil, nil, nil, nil, nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_enum: :foo}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, ["foo"], nil, nil, nil, nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, ["foo"], nil, nil, nil, nil, nil, nil, nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_enums: [:foo]}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, 1, nil, nil, nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, 1, nil, nil, nil, nil, nil, nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_integer_enum: :foo}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, [1], nil, nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, [1], nil, nil, nil, nil, nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_integer_enums: [:foo]}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, "fooo", nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, false, nil, nil, nil, nil, %{}]]})
+      assert [%Ecto.EnumTest.EnumSchema{my_boolean_enum: :foo}] = TestRepo.all(EnumSchema)
+
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, [false], nil, nil, nil, %{}]]})
+      assert [%Ecto.EnumTest.EnumSchema{my_boolean_enums: [:foo]}] = TestRepo.all(EnumSchema)
+
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, "fooo", nil, nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_string_enum: :foo}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, ["fooo"], nil, nil, %{}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, nil, ["fooo"], nil, %{}]]})
       assert [%Ecto.EnumTest.EnumSchema{my_string_enums: [:foo]}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, nil, %{"dumped_enum" => 1}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, nil, nil, nil, %{"dumped_enum" => 1}]]})
       assert [%Ecto.EnumTest.EnumSchema{embed: %{dumped_enum: :foo}}] = TestRepo.all(EnumSchema)
 
-      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, nil, %{"non_dumped_enum" => "foo"}]]})
+      Process.put(:test_repo_all_results, {1, [[1, nil, nil, nil, nil, nil, nil, nil, nil, nil, %{"non_dumped_enum" => "foo"}]]})
       assert [%Ecto.EnumTest.EnumSchema{embed: %{non_dumped_enum: :foo}}] = TestRepo.all(EnumSchema)
     end
 
@@ -467,6 +519,8 @@ defmodule Ecto.EnumTest do
       assert Ecto.Enum.values(EnumSchema, :my_string_enums) == [:foo, :bar, :baz]
       assert Ecto.Enum.values(EnumSchema, :my_integer_enum) == [:foo, :bar, :baz]
       assert Ecto.Enum.values(EnumSchema, :my_integer_enums) == [:foo, :bar, :baz]
+      assert Ecto.Enum.values(EnumSchema, :my_boolean_enum) == [:foo, :bar]
+      assert Ecto.Enum.values(EnumSchema, :my_boolean_enums) == [:foo, :bar]
       assert Ecto.Enum.values(EnumSchema, :virtual_enum) == [:foo, :bar, :baz]
     end
   end
@@ -479,6 +533,8 @@ defmodule Ecto.EnumTest do
       assert Ecto.Enum.dump_values(EnumSchema, :my_string_enums) == ["fooo", "baar", "baaz"]
       assert Ecto.Enum.dump_values(EnumSchema, :my_integer_enum) == [1, 2, 5]
       assert Ecto.Enum.dump_values(EnumSchema, :my_integer_enums) == [1, 2, 5]
+      assert Ecto.Enum.dump_values(EnumSchema, :my_boolean_enum) == [false, true]
+      assert Ecto.Enum.dump_values(EnumSchema, :my_boolean_enums) == [false, true]
       assert Ecto.Enum.dump_values(EnumSchema, :virtual_enum) == ["foo", "bar", "baz"]
     end
   end
@@ -491,6 +547,8 @@ defmodule Ecto.EnumTest do
       assert Ecto.Enum.mappings(EnumSchema, :my_string_enums) == [foo: "fooo", bar: "baar", baz: "baaz"]
       assert Ecto.Enum.mappings(EnumSchema, :my_integer_enum) == [foo: 1, bar: 2, baz: 5]
       assert Ecto.Enum.mappings(EnumSchema, :my_integer_enums) == [foo: 1, bar: 2, baz: 5]
+      assert Ecto.Enum.mappings(EnumSchema, :my_boolean_enum) == [foo: false, bar: true]
+      assert Ecto.Enum.mappings(EnumSchema, :my_boolean_enums) == [foo: false, bar: true]
       assert Ecto.Enum.mappings(EnumSchema, :virtual_enum) == [foo: "foo", bar: "bar", baz: "baz"]
     end
 
