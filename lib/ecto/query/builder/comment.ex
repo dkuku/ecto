@@ -9,6 +9,13 @@ defmodule Ecto.Query.Builder.Comment do
   @spec escape(Macro.t(), Macro.Env.t()) :: Macro.t()
   def escape(comment, _env) when is_binary(comment), do: comment
 
+  def escape({:cacheable, expr}, env) do
+    {expr, {_params, _acc}} =
+      Builder.escape(expr, :any, {[], %{}}, [], env)
+
+    expr
+  end
+
   def escape(expr, env) do
     {expr, {_params, _acc}} =
       Builder.escape(expr, :any, {[], %{}}, [], env)
@@ -19,14 +26,28 @@ defmodule Ecto.Query.Builder.Comment do
   @doc """
   Called at runtime to assemble comment.
   """
-  def comment!(query, comment, file, line) do
+
+  def comment!(query, comment, file, line, cacheable?) do
     comment = %CommentExpr{
       expr: comment,
       line: line,
-      file: file
+      file: file,
+      cacheable: cacheable?
     }
 
     apply(query, comment)
+  end
+
+  def build(query, {:cacheable, {:^, _, [var]}}, env) do
+    quote do
+      Ecto.Query.Builder.Comment.comment!(
+        unquote(query),
+        unquote(var),
+        unquote(env.file),
+        unquote(env.line),
+        true
+      )
+    end
   end
 
   def build(query, {:^, _, [var]}, env) do
@@ -35,7 +56,8 @@ defmodule Ecto.Query.Builder.Comment do
         unquote(query),
         unquote(var),
         unquote(env.file),
-        unquote(env.line)
+        unquote(env.line),
+        is_atom(unquote(var))
       )
     end
   end
