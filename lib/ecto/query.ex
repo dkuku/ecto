@@ -1754,6 +1754,66 @@ defmodule Ecto.Query do
     Builder.Select.build(:merge, query, binding, expr, __CALLER__)
   end
 
+  @doc """
+  Add comment to the generated SQL.
+
+  In SQL queries, comment parameters are unique compared to other
+  parameters. Standard parameters are represented by placeholders like ?,
+  which the database engine binds to actual values. These parameters are
+  placed in query clauses, such as WHERE or ORDER BY, and directly affect
+  query execution by impacting filtering, sorting, or joining operations.
+
+  However, unlike other parameters, dynamic comments can affect both caching
+  and prepared statements in Ecto. Each unique dynamic comment changes the
+  generated SQL, preventing caching and causing new prepared statements
+  to be created repeatedly. In these cases, caching doesn’t make sense,
+  as it could lead to cache pollution—storing many slightly different
+  versions of essentially the same query, which reduces cache efficiency.
+
+  For frequently changing dynamic comments, consider sampling or other
+  strategies to limit the variety of comments and maintain caching
+  effectiveness.
+
+  - Runtime comments from pinned variables are not cached by default since
+  inserting dynamic values into the query makes each query unique, making
+  caching ineffective. You can override this behavior if your dynamic values
+  have only a few distinct values.
+  - Compile-time comments are cached and do not add any overhead to caching.
+  - Atoms are cached, and since atoms should not be created dynamically,
+  caching should remain effective.
+  - Tuples where the first element is the atom `:cacheable` are cached.
+  Use this only if you're confident in your use case. :)
+  - cacheable_comment(var), it's an alias to the tuple version.
+
+      dynamic_value = "not cached by default"
+      dynamic_atom = :cached
+      query =
+        Post
+        |> comment(^dynamic_value)                # this is not cached
+        |> comment("this is a cached comment")
+        |> comment(^dynamic_atom)                 # this is cached
+        |> comment({:cacheable, ^dynamic_value})  # this is cached
+        |> cacheable_comment(^dynamic_value)      # this is cached
+
+  Here's an example of how you can sample 1% of queries to add a dynamic comment without heavily
+  impacting caching or prepared statements. By randomly adding comments to only a small percentage
+  of queries, you can reduce cache pollution and repeated preparation of statements while still
+  getting some traces for debugging or monitoring purposes.
+
+  ## Sample 1% of queries
+      defp sample_comment(query, comment_text) do
+        if :rand.uniform(100) == 1 do
+          comment(query, comment_text)
+        else
+          query
+        end
+      end
+
+  ## Usage example
+      query =
+        Post
+        |> sample_comment("Sampled for monitoring")
+  """
   defmacro comment(query, comment) do
     Builder.Comment.build(query, comment, __CALLER__)
   end
