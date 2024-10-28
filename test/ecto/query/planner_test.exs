@@ -196,7 +196,8 @@ defmodule Ecto.Query.PlannerTest do
         having: f.title == ^"having",
         order_by: [asc: fragment("?", ^"order_by")],
         limit: ^0,
-        offset: ^1
+        offset: ^1,
+        comment: ^"comment"
 
     {_query, cast_params, dump_params, _key} = plan(query)
 
@@ -681,6 +682,28 @@ defmodule Ecto.Query.PlannerTest do
       Post
       |> select([p], p.id)
       |> comment("cacheable")
+      |> Planner.plan(:all, Ecto.TestAdapter)
+
+    assert key != :nocache
+  end
+
+  test "plan: dynamic atom comments are cacheable" do
+    comment = :atom
+
+    {_query, _params, key} =
+      Post
+      |> select([p], p.id)
+      |> comment(^comment)
+      |> Planner.plan(:all, Ecto.TestAdapter)
+
+    assert key != :nocache
+  end
+
+  test "plan: cacheable_comment allows cache dynamic comments" do
+    {_query, _params, key} =
+      Post
+      |> select([p], p.id)
+      |> cacheable_comment(^"cache#{"able"}")
       |> Planner.plan(:all, Ecto.TestAdapter)
 
     assert key != :nocache
@@ -1892,7 +1915,11 @@ defmodule Ecto.Query.PlannerTest do
     start_param_ix = 0
     native_types = %{bid: :uuid, num: :integer}
     types_kw = Enum.map(types, fn {field, _} -> {field, native_types[field]} end)
-    field_ast = Enum.map(types, fn {field, _} -> {{:., [writable: :always], [{:&, [], [0]}, field]}, [], []} end)
+
+    field_ast =
+      Enum.map(types, fn {field, _} ->
+        {{:., [writable: :always], [{:&, [], [0]}, field]}, [], []}
+      end)
 
     assert q.from.source == {:values, [], [types_kw, start_param_ix, length(values)]}
     assert q.select.fields == field_ast
@@ -1910,7 +1937,12 @@ defmodule Ecto.Query.PlannerTest do
     start_param_ix = 1
     native_types = %{bid: :uuid, num: :integer}
     types_kw = Enum.map(types, fn {field, _} -> {field, native_types[field]} end)
-    field_ast = Enum.map(types, fn {field, _} -> {{:., [writable: :always], [{:&, [], [1]}, field]}, [], []} end)
+
+    field_ast =
+      Enum.map(types, fn {field, _} ->
+        {{:., [writable: :always], [{:&, [], [1]}, field]}, [], []}
+      end)
+
     [join] = q.joins
 
     assert join.source == {:values, [], [types_kw, start_param_ix, length(values)]}

@@ -985,11 +985,16 @@ defmodule Ecto.Query.Planner do
   defp merge_cache(:comment, _query, comments, cache_and_params, _operation, _adapter) do
     # binary comments can be cached, expression comments are dynamic so we don't cache the query
     Enum.reduce_while(comments, cache_and_params, fn
-      comment, {cache, params} when is_binary(comment) -> {:cont, {merge_cache({:comment, comment}, cache, true), params}}
-      %CommentExpr{}, {_cache, params} -> {:halt, {:nocache, params}}
+      comment, {cache, params} when is_binary(comment) ->
+        {:cont, {merge_cache({:comment, comment}, cache, true), params}}
+
+      %CommentExpr{cacheable: true, expr: comment}, {cache, params} ->
+        {:cont, {merge_cache({:comment, comment}, cache, true), params}}
+
+      %CommentExpr{}, {_cache, params} ->
+        {:halt, {:nocache, params}}
     end)
   end
-
 
   defp merge_cache(:with_cte, _query, nil, cache_and_params, _operation, _adapter) do
     cache_and_params
@@ -1362,17 +1367,18 @@ defmodule Ecto.Query.Planner do
     else
       {nil, counter}
     end
-
   end
 
   defp validate_and_increment(:comment, query, exprs, counter, _operation, adapter) do
     {exprs, counter} =
-    Enum.reduce(exprs, {[], counter}, fn
-      comment, {list, acc} when is_binary(comment) -> {[comment | list], acc + 1}
-      %CommentExpr{} = expr, {list, acc} ->
-        {expr, acc} = prewalk(:comment, query, expr, acc, adapter)
-        {[expr | list], acc}
-    end)
+      Enum.reduce(exprs, {[], counter}, fn
+        comment, {list, acc} when is_binary(comment) ->
+          {[comment | list], acc + 1}
+
+        %CommentExpr{} = expr, {list, acc} ->
+          {expr, acc} = prewalk(:comment, query, expr, acc, adapter)
+          {[expr | list], acc}
+      end)
 
     {Enum.reverse(exprs), counter}
   end
@@ -2410,7 +2416,6 @@ defmodule Ecto.Query.Planner do
     Enum.reduce(exprs, {query, acc}, fn {kind, key}, {query, acc} ->
       {traversed, acc} = fun.(kind, query, Map.fetch!(query, key), acc)
       {%{query | key => traversed}, acc}
-
     end)
   end
 
