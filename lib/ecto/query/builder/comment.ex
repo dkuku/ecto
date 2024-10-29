@@ -9,13 +9,6 @@ defmodule Ecto.Query.Builder.Comment do
   @spec escape(Macro.t(), Macro.Env.t()) :: Macro.t()
   def escape(comment, _env) when is_binary(comment), do: comment
 
-  def escape({:cacheable, expr}, env) do
-    {expr, {_params, _acc}} =
-      Builder.escape(expr, :any, {[], %{}}, [], env)
-
-    expr
-  end
-
   def escape(expr, env) do
     {expr, {_params, _acc}} =
       Builder.escape(expr, :any, {[], %{}}, [], env)
@@ -26,48 +19,37 @@ defmodule Ecto.Query.Builder.Comment do
   @doc """
   Called at runtime to assemble comment.
   """
+  def comment!(query, comment, file, line, opts) do
+    safe? = is_atom(comment)
+    if safe? || opts[:validated] || opts[:escape], do: :noop, else: validate(comment)
 
-  def comment!(query, comment, file, line, cacheable?) do
+    comment =
+      if opts[:escape], do: URI.encode(comment, &URI.char_unreserved?/1), else: comment
+
     comment = %CommentExpr{
       expr: comment,
       line: line,
       file: file,
-      cacheable: cacheable?
+      cache: safe? || opts[:cache]
     }
 
     apply(query, comment)
   end
 
-  def build(query, {:cacheable, {:^, _, [var]}}, env) do
+  def build(query, {:^, _, [var]}, opts, %Macro.Env{} = env) do
     quote do
       Ecto.Query.Builder.Comment.comment!(
         unquote(query),
         unquote(var),
         unquote(env.file),
         unquote(env.line),
-        true
+        unquote(opts)
       )
     end
   end
 
-  def build(query, {:^, _, [var]}, env) do
-    quote do
-      Ecto.Query.Builder.Comment.comment!(
-        unquote(query),
-        unquote(var),
-        unquote(env.file),
-        unquote(env.line),
-        is_atom(unquote(var))
-      )
-    end
-  end
-
-  def build(query, comment, env) do
+  def build(query, comment, _opts, %Macro.Env{} = env) do
     Builder.apply_query(query, __MODULE__, [escape(comment, env)], env)
-  end
-
-  def build(query, comment, _file, _line) do
-    apply(query, comment)
   end
 
   @doc """
@@ -80,5 +62,13 @@ defmodule Ecto.Query.Builder.Comment do
 
   def apply(query, comment) do
     apply(Ecto.Queryable.to_query(query), comment)
+  end
+
+  defp validate(comment) when is_binary(comment) do
+    if String.contains?(comment, "*/") do
+      raise ArgumentError, "comment must not contain a closing */ character"
+    end
+
+    comment
   end
 end
