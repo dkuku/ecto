@@ -429,7 +429,13 @@ defmodule Ecto.Query do
 
   defmodule CommentExpr do
     @moduledoc false
-    defstruct [:expr, :file, :line, cacheable: false, params: []]
+    defstruct [
+      :expr,
+      :file,
+      :line,
+      cache: false,
+      params: []
+    ]
   end
 
   defmodule QueryExpr do
@@ -1814,12 +1820,8 @@ defmodule Ecto.Query do
         Post
         |> sample_comment("Sampled for monitoring")
   """
-  defmacro comment(query, comment) do
-    Builder.Comment.build(query, comment, __CALLER__)
-  end
-
-  defmacro cacheable_comment(query, comment) do
-    Builder.Comment.build(query, {:cacheable, comment}, __CALLER__)
+  defmacro comment(query, comment, opts \\ []) do
+    Builder.Comment.build(query, comment, opts, __CALLER__)
   end
 
   @doc """

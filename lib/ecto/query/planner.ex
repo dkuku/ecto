@@ -988,7 +988,7 @@ defmodule Ecto.Query.Planner do
       comment, {cache, params} when is_binary(comment) ->
         {:cont, {merge_cache({:comment, comment}, cache, true), params}}
 
-      %CommentExpr{cacheable: true, expr: comment}, {cache, params} ->
+      %CommentExpr{cache: true, expr: comment}, {cache, params} ->
         {:cont, {merge_cache({:comment, comment}, cache, true), params}}
 
       %CommentExpr{}, {_cache, params} ->

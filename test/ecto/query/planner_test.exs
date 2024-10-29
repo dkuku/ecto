@@ -703,7 +703,7 @@ defmodule Ecto.Query.PlannerTest do
     {_query, _params, key} =
       Post
       |> select([p], p.id)
-      |> cacheable_comment(^"cache#{"able"}")
+      |> comment(^"cache#{"able"}", cache: true)
       |> Planner.plan(:all, Ecto.TestAdapter)
 
     assert key != :nocache
