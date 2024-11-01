@@ -1787,26 +1787,33 @@ defmodule Ecto.Query do
   - Compile-time comments are cached and do not add any overhead to caching.
   - Atoms are cached, and since atoms should not be created dynamically,
   caching should remain effective.
-  - Tuples where the first element is the atom `:cacheable` are cached.
+  - Dynamic values where the config option cache: true is provided.
   Use this only if you're confident in your use case. :)
-  - cacheable_comment(var), it's an alias to the tuple version.
 
       dynamic_value = "not cached by default"
       dynamic_atom = :cached
       query =
         Post
         |> comment(^dynamic_value)                # this is not cached
-        |> comment("this is a cached comment")
+        |> comment("this is a cached comment")    # this is cached
         |> comment(^dynamic_atom)                 # this is cached
-        |> comment({:cacheable, ^dynamic_value})  # this is cached
-        |> cacheable_comment(^dynamic_value)      # this is cached
+        |> comment(^dynamic_value, cache: true)   # this is cached
+
+  Comments are collected - the above will return a list containing all the comments.
+
+  Dynamic strings are validated for containing `*/` string.
+  it can be overridden by passing `validated: true` option when you are sure that it's safe.
+
+  A comment can be url escaped by passing `escape: true` option.
+  In this case the validation is skipped because it's safe in this case.
+
+  ## Sample 1% of queries
 
   Here's an example of how you can sample 1% of queries to add a dynamic comment without heavily
   impacting caching or prepared statements. By randomly adding comments to only a small percentage
   of queries, you can reduce cache pollution and repeated preparation of statements while still
   getting some traces for debugging or monitoring purposes.
 
-  ## Sample 1% of queries
       defp sample_comment(query, comment_text) do
         if :rand.uniform(100) == 1 do
           comment(query, comment_text)
@@ -1815,10 +1822,39 @@ defmodule Ecto.Query do
         end
       end
 
-  ## Usage example
       query =
         Post
         |> sample_comment("Sampled for monitoring")
+
+  ## Add it globally to your app
+  Modify your Repo module
+
+      defmodule MyApp.Repo do
+        require Ecto.Query
+
+        use Ecto.Repo,
+          otp_app: :sqlcomm,
+          adapter: Ecto.Adapters.Postgres
+
+        def default_options(_operation) do
+          [stacktrace: true]
+        end
+
+        def prepare_query(_operation, query, opts) do
+          if opts[:sqlcomment] do
+            {Ecto.Query.comment(query, ^opts[:sqlcomment], validated: true), opts}
+          else
+            caller = Sqlcommenter.extract_repo_caller(opts, __MODULE__)
+            sqlcommenter = [app: "sqlcomm", caller: Sqlcommenter.escape(caller), team: "team_sql"]
+            comment = generate_comment(sqlcommenter)
+            {Ecto.Query.comment(query, ^comment, cache: true, validated: true), opts}
+          end
+        end
+
+        def generate_comment(sqlcommenter) do
+          for({k, v} <- sqlcommenter, do: [Atom.to_string(k), "='", v, ?']) |> Enum.intersperse(",")
+        end
+      end
   """
   defmacro comment(query, comment, opts \\ []) do
     Builder.Comment.build(query, comment, opts, __CALLER__)
