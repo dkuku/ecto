@@ -21,6 +21,7 @@ defmodule Ecto.Query.Builder.Comment do
   """
   def comment!(query, comment, file, line, opts) do
     safe? = is_atom(comment)
+
     if safe? || opts[:validated] || opts[:escape], do: :noop, else: validate(comment)
 
     comment =
