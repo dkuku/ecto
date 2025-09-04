@@ -397,6 +397,7 @@ defmodule Ecto.Query do
   """
   defstruct prefix: nil,
             sources: nil,
+            comments: [],
             from: nil,
             joins: [],
             aliases: %{},
@@ -951,6 +952,7 @@ defmodule Ecto.Query do
       Ecto.Query.exclude(query, :distinct)
       Ecto.Query.exclude(query, :select)
       Ecto.Query.exclude(query, :combinations)
+      Ecto.Query.exclude(query, :comments)
       Ecto.Query.exclude(query, :with_ctes)
       Ecto.Query.exclude(query, :limit)
       Ecto.Query.exclude(query, :offset)
@@ -1005,6 +1007,7 @@ defmodule Ecto.Query do
   defp do_exclude(%Ecto.Query{} = query, :order_by), do: %{query | order_bys: []}
   defp do_exclude(%Ecto.Query{} = query, :group_by), do: %{query | group_bys: []}
   defp do_exclude(%Ecto.Query{} = query, :combinations), do: %{query | combinations: []}
+  defp do_exclude(%Ecto.Query{} = query, :comments), do: %{query | comments: []}
   defp do_exclude(%Ecto.Query{} = query, :with_ctes), do: %{query | with_ctes: nil}
   defp do_exclude(%Ecto.Query{} = query, :having), do: %{query | havings: []}
   defp do_exclude(%Ecto.Query{} = query, :distinct), do: %{query | distinct: nil}
@@ -1135,7 +1138,7 @@ defmodule Ecto.Query do
   end
 
   @from_join_opts [:as, :prefix, :hints]
-  @no_binds [:union, :union_all, :except, :except_all, :intersect, :intersect_all]
+  @no_binds [:union, :union_all, :except, :except_all, :intersect, :intersect_all, :comment]
   @binds [:lock, :where, :or_where, :select, :distinct, :order_by, :group_by, :windows] ++
            [:having, :or_having, :limit, :offset, :preload, :update, :select_merge, :with_ctes]
 
@@ -1771,6 +1774,10 @@ defmodule Ecto.Query do
   """
   defmacro select_merge(query, binding \\ [], expr) do
     Builder.Select.build(:merge, query, binding, expr, __CALLER__)
+  end
+
+  defmacro comment(query, comment, opts \\ []) do
+    Builder.Comment.build(query, comment, opts, __CALLER__)
   end
 
   @doc """
