@@ -58,6 +58,11 @@ defimpl Inspect, for: Ecto.Query do
 
     result = container_doc("#Ecto.Query<", list, ">", opts, fn str, _ -> str end)
 
+    result =
+      if query.comments == [],
+        do: result,
+        else: concat([comment(query.comments), "\n", result])
+
     case query.with_ctes do
       %WithExpr{recursive: recursive, queries: [_ | _] = queries} ->
         with_ctes =
@@ -173,6 +178,12 @@ defimpl Inspect, for: Ecto.Query do
   defp inspect_source(%{source: {source, schema}} = part, names) do
     source = if is_binary(source), do: source, else: "#{expr(source, names, part)}"
     inspect(if source == schema.__schema__(:source), do: schema, else: {source, schema})
+  end
+
+  defp comment(comments) do
+    Enum.map_join(comments, "\n", fn
+      comment when is_binary(comment) -> "# #{comment}"
+    end)
   end
 
   defp joins(joins, names) do
